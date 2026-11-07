@@ -16,8 +16,8 @@ Android proof-of-concept for loading versioned DEX modules over an ADB-forwarded
 Use JDK 17+ and Android SDK platform 36 / Build Tools 36.0.0.
 
 ```bash
-./gradlew :app:assembleDebug
-./gradlew :hotmodule:assembleDebug :hotmodule:makeDex
+sh ./gradlew :app:assembleDebug
+sh ./gradlew :hotmodule:assembleDebug :hotmodule:makeDex
 ```
 
 The sample DEX is written to `hotmodule/build/outputs/dex/classes.dex`.
