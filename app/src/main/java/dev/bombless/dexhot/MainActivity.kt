@@ -21,8 +21,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import dev.bombless.dexhot.contract.HotScreen
-import dev.bombless.dexhot.contract.HostApi
 
 class MainActivity : ComponentActivity() {
     private lateinit var manager: HotModuleManager
@@ -36,15 +34,24 @@ class MainActivity : ComponentActivity() {
         setContent {
             var screen by remember { mutableStateOf(manager.current()) }
             var versions by remember { mutableStateOf(manager.versions()) }
+            var message by remember { mutableStateOf("等待 DEX 上传") }
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
                     Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("DEX Hot Reload", style = MaterialTheme.typography.headlineMedium)
                         Text("TCP 127.0.0.1:${TcpUpdateServer.PORT} · Debug only")
                         Text("当前版本：${manager.currentVersion() ?: "未加载"}")
+                        Text(message, style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(onClick = { runCatching { screen = manager.rollback(); versions = manager.versions() } }) { Text("回退上一版本") }
-                            Button(onClick = { versions = manager.versions() }) { Text("刷新版本") }
+                            Button(onClick = {
+                                runCatching { screen = manager.rollback(); versions = manager.versions(); message = "已回退到 ${screen?.version}" }
+                                    .onFailure { message = it.message ?: "回退失败" }
+                            }) { Text("回退上一版本") }
+                            Button(onClick = {
+                                versions = manager.versions()
+                                screen = manager.current()
+                                message = if (screen == null) "尚未加载模块" else "已刷新：${screen?.version}"
+                            }) { Text("刷新状态") }
                         }
                         Text("版本历史", style = MaterialTheme.typography.titleMedium)
                         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -52,7 +59,10 @@ class MainActivity : ComponentActivity() {
                                 Card {
                                     Row(Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                                         Text(version)
-                                        Button(onClick = { runCatching { screen = manager.activate(version) } }) { Text("激活") }
+                                        Button(onClick = {
+                                            runCatching { screen = manager.activate(version); message = "已激活：${screen?.version}" }
+                                                .onFailure { message = it.message ?: "激活失败" }
+                                        }) { Text("激活") }
                                     }
                                 }
                             }
