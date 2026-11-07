@@ -4,7 +4,7 @@ Android proof-of-concept for loading versioned DEX modules over an ADB-forwarded
 
 ## Stack
 
-- Gradle Wrapper: **9.1.0**
+- Gradle bootstrap script / distribution: **9.1.0** (the repository pins the same version in `gradle-wrapper.properties`)
 - Android Gradle Plugin: 9.0.0
 - Kotlin / Compose compiler plugin: 2.2.10
 - minSdk 26 (InMemory DEX loading is not used; DexClassLoader is used)
