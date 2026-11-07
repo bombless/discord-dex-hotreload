@@ -1,8 +1,10 @@
 package dev.bombless.dexhot
 
 import android.content.Context
+import android.util.Log
 import dalvik.system.DexClassLoader
 import dev.bombless.dexhot.contract.HotScreen
+import dev.bombless.dexhot.contract.HostApi
 import java.io.File
 
 class HotModuleManager(context: Context) {
@@ -10,6 +12,11 @@ class HotModuleManager(context: Context) {
     private val prefs = context.getSharedPreferences("hot-modules", Context.MODE_PRIVATE)
     @Volatile private var active: HotScreen? = null
     @Volatile private var activeLoader: ClassLoader? = null
+
+    private val hostApi = object : HostApi {
+        override fun log(message: String) { Log.i("HotModule", message.take(2000)) }
+        override fun currentVersion(): String? = prefs.getString("current", null)
+    }
 
     @Synchronized fun install(version: String, dex: ByteArray, entryClass: String): HotScreen {
         require(version.matches(Regex("[A-Za-z0-9._-]{1,64}"))) { "Invalid version" }
@@ -21,14 +28,15 @@ class HotModuleManager(context: Context) {
         temp.writeBytes(dex)
         check(temp.renameTo(target)) { "Unable to atomically store DEX" }
         val screen = instantiate(target, entryClass)
-        prefs.edit().putString("entry:$version", entryClass).putString("previous", prefs.getString("current", null)).putString("current", version).apply()
+        prefs.edit().putString("entry:$version", entryClass)
+            .putString("previous", prefs.getString("current", null))
+            .putString("current", version).apply()
         active = screen
         return screen
     }
 
     @Synchronized fun activate(version: String): HotScreen {
-        val dir = File(root, version)
-        val dex = File(dir, "classes.dex")
+        val dex = File(File(root, version), "classes.dex")
         require(dex.isFile) { "Version not found: $version" }
         val entry = prefs.getString("entry:$version", null) ?: error("Entry class missing")
         val screen = instantiate(dex, entry)
@@ -40,16 +48,19 @@ class HotModuleManager(context: Context) {
     private fun instantiate(dex: File, entry: String): HotScreen {
         val optimized = File(root, "optimized").apply { mkdirs() }
         val loader = DexClassLoader(dex.absolutePath, optimized.absolutePath, null, HotScreen::class.java.classLoader)
-        val type = loader.loadClass(entry)
-        val instance = type.getDeclaredConstructor().newInstance()
+        val instance = loader.loadClass(entry).getDeclaredConstructor().newInstance()
         require(instance is HotScreen) { "Module must implement HotScreen from the host contract" }
+        instance.onHostAttached(hostApi)
         activeLoader = loader // Keep the class loader alive while its composable is in use.
         return instance
     }
 
     fun current(): HotScreen? = active
     fun currentVersion(): String? = prefs.getString("current", null)
-    fun versions(): List<String> = root.listFiles()?.filter { File(it, "classes.dex").isFile }?.map { it.name }?.sortedDescending() ?: emptyList()
+    fun versions(): List<String> = root.listFiles()
+        ?.filter { File(it, "classes.dex").isFile && prefs.contains("entry:${it.name}") }
+        ?.map { it.name }?.sortedDescending() ?: emptyList()
+
     fun rollback(): HotScreen {
         val previous = prefs.getString("previous", null) ?: error("No previous version")
         return activate(previous)
